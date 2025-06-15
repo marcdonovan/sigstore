@@ -23,11 +23,12 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Push artifact to OCI registry (for attestation binding)
+      - name: Upload artifact to OCI registry
         run: |
-          IMAGE="ghcr.io/${{ github.repository }}/myapp:latest"
-          cosign upload blob myapp.tar.gz $IMAGE
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          REPO="ghcr.io/${{ github.repository }}/myapp"
+          TAG="latest"
+          cosign upload blob --repo $REPO --tag $TAG myapp.tar.gz
+          echo "IMAGE=$REPO:$TAG" >> $GITHUB_ENV
 
       - name: Sign artifact with Cosign (keyless)
         run: |
