@@ -24,7 +24,7 @@ jobs:
         run: |
           REPO="ghcr.io/${{ github.repository }}/myapp"
           TAG="latest"
-          cosign upload blob --repo $REPO --tag $TAG myapp.tar.gz
+          ./cosign upload blob --repo $REPO --tag $TAG myapp.tar.gz
           echo "IMAGE=$REPO:$TAG" >> $GITHUB_ENV
 
       - name: Sign artifact with Cosign (keyless)
