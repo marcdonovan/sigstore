@@ -38,8 +38,9 @@ jobs:
 
       - name: Upload artifact to OCI registry
         run: |
-          cosign upload blob myapp.tar.gz ghcr.io/marcdonovan/sigstore/myapp:latest
-          echo "IMAGE=$REPO:$TAG" >> $GITHUB_ENV
+          export COSIGN_REPOSITORY="ghcr.io/${{ github.repository }}/myapp:latest"
+          cosign upload blob myapp.tar.gz
+          echo "IMAGE=$COSIGN_REPOSITORY" >> $GITHUB_ENV
 
       - name: Sign artifact with Cosign (keyless)
         run: |
