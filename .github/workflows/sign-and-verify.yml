@@ -20,11 +20,11 @@ jobs:
           echo "Hello world" > myapp.txt
           tar -czf myapp.tar.gz myapp.txt
 
-      - name: Install ORAS CLI
+      - name: Download oras CLI
         run: |
           URL="https://github.com/oras-project/oras/releases/download/v0.18.0/oras_0.18.0_linux_amd64.tar.gz"
-          curl -sL "$URL" -o oras.tar.gz
-          file oras.tar.gz
+          curl -vL -o oras.tar.gz $URL
+          head -20 oras.tar.gz
           mkdir oras-install
           tar -xzf oras.tar.gz -C oras-install
           chmod +x oras-install/oras
