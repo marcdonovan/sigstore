@@ -25,8 +25,8 @@ jobs:
 
       - name: Push artifact to OCI registry (for attestation binding)
         run: |
-          IMAGE="ghcr.io/${{ github.repository }}/myapp"
-          cosign upload blob --tag $IMAGE:latest myapp.tar.gz
+          IMAGE="ghcr.io/${{ github.repository }}/myapp:latest"
+          cosign upload blob myapp.tar.gz $IMAGE
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Sign artifact with Cosign (keyless)
