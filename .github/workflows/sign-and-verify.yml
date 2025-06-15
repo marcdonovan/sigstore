@@ -47,7 +47,7 @@ jobs:
 
       - name: Sign artifact with Cosign (keyless)
         env:
-          COSIGN_EXPERIMENTAL=1    # enables keyless if needed
+          COSIGN_EXPERIMENTAL: "1"
         run: |
           cosign sign --yes $IMAGE
 
