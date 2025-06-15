@@ -22,7 +22,9 @@ jobs:
 
       - name: Install ORAS CLI
         run: |
-          curl -sL https://github.com/oras-project/oras/releases/latest/download/oras_0.18.0_linux_amd64.tar.gz -o oras.tar.gz
+          URL="https://github.com/oras-project/oras/releases/download/v0.18.0/oras_0.18.0_linux_amd64.tar.gz"
+          curl -sL "$URL" -o oras.tar.gz
+          file oras.tar.gz
           mkdir oras-install
           tar -xzf oras.tar.gz -C oras-install
           chmod +x oras-install/oras
