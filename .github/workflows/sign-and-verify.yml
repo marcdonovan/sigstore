@@ -26,10 +26,10 @@ jobs:
           chmod +x cosign
           sudo mv cosign /usr/local/bin/cosign
 
-      - name: Install ORAS CLI v0.18.0
+      - name: Install ORAS CLI v1.1.0
         run: |
-          curl -sLo oras.tar.gz https://github.com/oras-project/oras/releases/download/v0.18.0/oras_0.18.0_linux_amd64.tar.gz
-          mkdir oras-install
+          curl -sLo oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.1.0/oras_1.1.0_linux_amd64.tar.gz
+          mkdir -p oras-install
           tar -xzf oras.tar.gz -C oras-install
           chmod +x oras-install/oras
           sudo mv oras-install/oras /usr/local/bin/oras
