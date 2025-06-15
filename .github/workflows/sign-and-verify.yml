@@ -8,8 +8,11 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write       # For Sigstore keyless signing
-      contents: read
+      id-token: write       # Required for Sigstore keyless signing
+      contents: read        # Required to checkout code
+
+    env:
+      IMAGE: ghcr.io/marcdonovan/sigstore/myapp:latest
 
     steps:
       - name: Checkout code
@@ -20,21 +23,16 @@ jobs:
           echo "Hello world" > myapp.txt
           tar -czf myapp.tar.gz myapp.txt
 
-      - name: Download oras CLI
+      - name: Install ORAS CLI
         run: |
           URL="https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz"
-          curl -vL -o oras.tar.gz $URL
-          mkdir oras-install
-          tar -xzf oras.tar.gz -C oras-install
-          chmod +x oras-install/oras
-          sudo mv oras-install/oras /usr/local/bin/oras
+          curl -L -o oras.tar.gz $URL
+          tar -xzf oras.tar.gz
+          chmod +x oras
+          sudo mv oras /usr/local/bin/oras
           oras version
 
-      - name: Set IMAGE env var
-        run: echo "IMAGE=ghcr.io/${{ github.repository_owner }}/sigstore/myapp:latest" >> $GITHUB_ENV
-
-
-      - name: Login to GHCR
+      - name: Login to GHCR with PAT
         env:
           PAT_TOKEN: ${{ secrets.PAT }}
         run: |
@@ -46,40 +44,19 @@ jobs:
             myapp.tar.gz:application/gzip
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-#      - name: Push artifact blob to GHCR
-#        env:
-#          IMAGE: ghcr.io/${{ github.repository_owner }}/sigstore/myapp:latest
-#        run: |
-#          oras push "$IMAGE" myapp.tar.gz:application/gzip
-
-      - name: Set image environment variable
-        env:
-          IMAGE: ghcr.io/${{ github.repository_owner }}/sigstore/myapp:latest
-        run: echo "IMAGE=$IMAGE" >> $GITHUB_ENV
-
       - name: Install Cosign v2.2.0
         run: |
           COSIGN_VERSION=v2.2.0
           curl -Lo cosign https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64
           chmod +x cosign
           sudo mv cosign /usr/local/bin/cosign
-
-      - name: Push artifact to GHCR with ORAS
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          IMAGE="ghcr.io/${{ github.repository }}/myapp:latest"
-          echo "${GITHUB_TOKEN}" | ./oras-install/oras login ghcr.io -u ${{ github.actor }} --password-stdin
-          ./oras-install/oras push "$IMAGE" \
-            --manifest-config /dev/null:application/vnd.oci.image.config.v1+json \
-            myapp.tar.gz:application/gzip
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          cosign version
 
       - name: Sign artifact with Cosign (keyless)
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
-          cosign sign --yes $IMAGE
+          cosign sign --yes "$IMAGE"
 
       - name: Create predicate file for attestation
         run: |
@@ -89,3 +66,10 @@ jobs:
             "buildType": "github-actions",
             "commit": "${{ github.sha }}"
           }
+          EOF
+
+      - name: Attest artifact with Cosign (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign attest --yes --predicate predicate.json --type custom "$IMAGE"
