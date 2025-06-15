@@ -85,7 +85,7 @@ jobs:
           COSIGN_EXPERIMENTAL: "1"
         run: |
           echo "Verifying signature for $IMAGE"
-          cosign verify "$IMAGE"
-
+          cosign verify --certificate-identity-regexp "https://github.com/.*/.*/actions/workflow/.*/run/.*" "$IMAGE"
+          
           echo "Verifying attestation for $IMAGE"
-          cosign verify-attestation "$IMAGE"
+          cosign verify-attestation --certificate-identity-regexp "https://github.com/.*/.*/actions/workflow/.*/run/.*" "$IMAGE"
