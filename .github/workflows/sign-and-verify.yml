@@ -1,30 +1,24 @@
-name: Build, Push, Sign, and Attest with Provenance
+name: Build, Sign, and Attest with Provenance
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-push-sign-attest:
+  build-sign-attest:
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
-      id-token: write  # Required for Sigstore and SLSA keyless signing
+      id-token: write  # Required for keyless signing
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Build artifact
+      - name: Build binary artifact
         run: |
           echo "Hello world" > myapp.txt
           tar -czf myapp.tar.gz myapp.txt
-
-      - name: Install ORAS
-        run: |
-          curl -Lo oras https://github.com/oras-project/oras/releases/download/v0.18.0/oras_linux_amd64
-          chmod +x oras
-          sudo mv oras /usr/local/bin/oras
 
       - name: Install Cosign v2.2.0
         run: |
@@ -32,29 +26,50 @@ jobs:
           chmod +x cosign
           sudo mv cosign /usr/local/bin/cosign
 
-      - name: Authenticate to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Install ORAS CLI
+        run: |
+          curl -Lo oras https://github.com/oras-project/oras/releases/download/v0.18.0/oras_linux_amd64
+          chmod +x oras
+          sudo mv oras /usr/local/bin/oras
 
       - name: Push artifact to GHCR
         run: |
           IMAGE="ghcr.io/${{ github.repository }}/myapp:latest"
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
           oras push "$IMAGE" \
             --manifest-config /dev/null:application/vnd.oci.image.config.v1+json \
             myapp.tar.gz:application/gzip
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      - name: Sign artifact with Cosign (keyless)
+      - name: Sign artifact with Cosign
         run: |
-          cosign sign --yes $IMAGE
+          cosign sign --yes "$IMAGE"
 
-      - name: Generate and attest SLSA provenance
-        uses: slsa-framework/slsa-github-generator/actions/provenance@v1.6.0
-        with:
-          artifact-path: myapp.tar.gz
-          subject-name: ${{ env.IMAGE }}
-          upload-assets: false
-
-      # Optional: verify provenance
-      # - name: Verify provenance (if needed)
-      #   run: |
-      #     cosign verify-attestation --type slsaprovenance $IMAGE
+      - name: Generate provenance.json
+        run: |
+          DIGEST=$(sha256sum myapp.tar.gz | cut -d ' ' -f1)
+          cat <<EOF > provenance.json
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "subject": [{
+              "name": "myapp.tar.gz",
+              "digest": {
+                "sha256": "$DIGEST"
+              }
+            }],
+            "predicateType": "https://slsa.dev/provenance/v0.2",
+            "predicate": {
+              "builder": {
+                "id": "https://github.com/${{ github.repository }}/.github/workflows/${{ github.workflow }}"
+              },
+              "buildType": "github-actions",
+              "invocation": {
+                "configSource": {
+                  "uri": "git+https://github.com/${{ github.repository }}",
+                  "digest": {
+                    "sha1": "${{ github.sha }}"
+                  },
+                  "entryPoint": "${{ github.workflow }}"
+                },
+                "parameters": {},
+                "environment":
