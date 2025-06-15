@@ -1,30 +1,24 @@
-name: Build, Sign, and Attest with Provenance
+name: Build, Push, Sign, and Attest
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-sign-attest:
+  build-push-sign-attest:
     runs-on: ubuntu-latest
 
     permissions:
+      id-token: write       # For Sigstore keyless signing
       contents: read
-      id-token: write  # Required for keyless signing
 
     steps:
-      - name: Checkout source
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build binary artifact
+      - name: Build artifact
         run: |
           echo "Hello world" > myapp.txt
           tar -czf myapp.tar.gz myapp.txt
-
-      - name: Install Cosign v2.2.0
-        run: |
-          curl -Lo cosign https://github.com/sigstore/cosign/releases/download/v2.2.0/cosign-linux-amd64
-          chmod +x cosign
-          sudo mv cosign /usr/local/bin/cosign
 
       - name: Install ORAS CLI v1.1.0
         run: |
@@ -32,49 +26,36 @@ jobs:
           mkdir -p oras-install
           tar -xzf oras.tar.gz -C oras-install
           chmod +x oras-install/oras
-          sudo mv oras-install/oras /usr/local/bin/oras
 
-      - name: Verify ORAS install
-        run: oras version
+      - name: Install Cosign v2.2.0
+        run: |
+          COSIGN_VERSION=v2.2.0
+          curl -Lo cosign https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64
+          chmod +x cosign
+          sudo mv cosign /usr/local/bin/cosign
 
-      - name: Push artifact to GHCR
+      - name: Push artifact to GHCR with ORAS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           IMAGE="ghcr.io/${{ github.repository }}/myapp:latest"
-          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
-          oras push "$IMAGE" \
+          echo "${GITHUB_TOKEN}" | ./oras-install/oras login ghcr.io -u ${{ github.actor }} --password-stdin
+          ./oras-install/oras push "$IMAGE" \
             --manifest-config /dev/null:application/vnd.oci.image.config.v1+json \
             myapp.tar.gz:application/gzip
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      - name: Sign artifact with Cosign
+      - name: Sign artifact with Cosign (keyless)
+        env:
+          COSIGN_EXPERIMENTAL=1    # enables keyless if needed
         run: |
-          cosign sign --yes "$IMAGE"
+          cosign sign --yes $IMAGE
 
-      - name: Generate provenance.json
+      - name: Create predicate file for attestation
         run: |
-          DIGEST=$(sha256sum myapp.tar.gz | cut -d ' ' -f1)
-          cat <<EOF > provenance.json
+          cat <<EOF > predicate.json
           {
-            "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-              "name": "myapp.tar.gz",
-              "digest": {
-                "sha256": "$DIGEST"
-              }
-            }],
-            "predicateType": "https://slsa.dev/provenance/v0.2",
-            "predicate": {
-              "builder": {
-                "id": "https://github.com/${{ github.repository }}/.github/workflows/${{ github.workflow }}"
-              },
-              "buildType": "github-actions",
-              "invocation": {
-                "configSource": {
-                  "uri": "git+https://github.com/${{ github.repository }}",
-                  "digest": {
-                    "sha1": "${{ github.sha }}"
-                  },
-                  "entryPoint": "${{ github.workflow }}"
-                },
-                "parameters": {},
-                "environment":
+            "builder": "${{ github.actor }}",
+            "buildType": "github-actions",
+            "commit": "${{ github.sha }}"
+          }
