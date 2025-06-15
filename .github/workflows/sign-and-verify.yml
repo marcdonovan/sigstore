@@ -27,10 +27,14 @@ jobs:
           mkdir -p $HOME/.local/bin
           curl -Lo $HOME/.local/bin/cosign https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64
           chmod +x $HOME/.local/bin/cosign
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Confirm Cosign version
-        run: cosign version
+      - name: Add cosign to PATH
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Check cosign version and path
+        run: |
+          which cosign
+          cosign version
 
       - name: Upload artifact to OCI registry
         run: |
