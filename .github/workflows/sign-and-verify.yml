@@ -22,13 +22,14 @@ jobs:
 
       - name: Download oras CLI
         run: |
-          URL="https://github.com/oras-project/oras/releases/download/v0.18.0/oras_0.18.0_linux_amd64.tar.gz"
+          URL="https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz"
           curl -vL -o oras.tar.gz $URL
           head -20 oras.tar.gz
           mkdir oras-install
           tar -xzf oras.tar.gz -C oras-install
           chmod +x oras-install/oras
           sudo mv oras-install/oras /usr/local/bin/oras
+          oras --version
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
