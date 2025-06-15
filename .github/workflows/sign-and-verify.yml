@@ -1,21 +1,21 @@
-name: Sign and Upload Binary Artifact
+name: Build, Sign, Attest Binary
 
 on:
   workflow_dispatch:
 
 jobs:
-  sign-artifact:
+  build-sign-attest:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write  # for keyless OIDC signing
+      id-token: write   # Required for Sigstore keyless signing
       contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build your binary artifact
+      - name: Build binary artifact
         run: |
           echo "Hello world" > myapp.txt
           tar -czf myapp.tar.gz myapp.txt
@@ -23,35 +23,78 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Sign the artifact with Cosign (keyless)
+      - name: Push artifact to OCI registry (for attestation binding)
         run: |
-          cosign sign-blob --yes --output-signature myapp.sig myapp.tar.gz
+          IMAGE="ghcr.io/${{ github.repository }}/myapp"
+          cosign upload blob --yes --tag $IMAGE:latest myapp.tar.gz
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      - name: Generate and sign attestation
+      - name: Sign artifact with Cosign (keyless)
+        run: |
+          cosign sign --yes $IMAGE:latest
+
+      - name: Create predicate file
+        run: |
+          cat <<EOF > predicate.json
+          {
+            "builder": "${{ github.actor }}",
+            "buildType": "github-actions",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+
+      - name: Generate and upload attestation (keyless)
         run: |
           cosign attest --yes \
             --type custom \
-            --predicate <(echo '{"build": "github-actions", "builder": "${{ github.actor }}"}') \
-            --output-signature myapp.att.sig \
-            --output-attestation myapp.att.json \
-            myapp.tar.gz
+            --predicate predicate.json
+name: Build, Sign, Attest Binary
 
-      - name: Upload to Artifactory
+on:
+  workflow_dispatch:
+
+jobs:
+  build-sign-attest:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write   # Required for Sigstore keyless signing
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build binary artifact
         run: |
-          curl -u "${{ secrets.ARTIFACTORY_USER }}:${{ secrets.ARTIFACTORY_API_KEY }}" \
-            -T myapp.tar.gz "https://your-artifactory-domain/artifactory/generic-local/myapp.tar.gz"
-          
-          curl -u "${{ secrets.ARTIFACTORY_USER }}:${{ secrets.ARTIFACTORY_API_KEY }}" \
-            -T myapp.sig "https://your-artifactory-domain/artifactory/generic-local/myapp.tar.gz.sig"
-          
-          curl -u "${{ secrets.ARTIFACTORY_USER }}:${{ secrets.ARTIFACTORY_API_KEY }}" \
-            -T myapp.att.json "https://your-artifactory-domain/artifactory/generic-local/myapp.tar.gz.att.json"
+          echo "Hello world" > myapp.txt
+          tar -czf myapp.tar.gz myapp.txt
 
-      - name: Upload to GitHub artifacts (optional)
-        uses: actions/upload-artifact@v4
-        with:
-          name: signed-artifacts
-          path: |
-            myapp.tar.gz
-            myapp.sig
-            myapp.att.json
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Push artifact to OCI registry (for attestation binding)
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}/myapp"
+          cosign upload blob --yes --tag $IMAGE:latest myapp.tar.gz
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Sign artifact with Cosign (keyless)
+        run: |
+          cosign sign --yes $IMAGE:latest
+
+      - name: Create predicate file
+        run: |
+          cat <<EOF > predicate.json
+          {
+            "builder": "${{ github.actor }}",
+            "buildType": "github-actions",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+
+      - name: Generate and upload attestation (keyless)
+        run: |
+          cosign attest --yes \
+            --type custom \
+            --predicate predicate.json
