@@ -28,10 +28,13 @@ jobs:
 
       - name: Install ORAS CLI
         run: |
-          curl -sLo oras.tar.gz https://github.com/oras-project/oras/releases/download/v0.18.0/oras_0.18.0_linux_amd64.tar.gz
-          tar -xzf oras.tar.gz oras
+          curl -sLo oras.zip https://github.com/oras-project/oras/releases/download/v0.18.0/oras_0.18.0_linux_amd64.zip
+          unzip oras.zip oras
           chmod +x oras
           sudo mv oras /usr/local/bin/oras
+
+      - name: Verify ORAS install
+        run: oras version
 
       - name: Push artifact to GHCR
         run: |
