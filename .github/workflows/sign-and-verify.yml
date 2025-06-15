@@ -39,7 +39,6 @@ jobs:
       - name: Push artifact to GHCR
         run: |
           oras push "$IMAGE" \
-            --manifest-config /dev/null:application/vnd.oci.image.config.v1+json \
             myapp.tar.gz:application/gzip
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
