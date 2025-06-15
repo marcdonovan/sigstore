@@ -64,7 +64,13 @@ jobs:
           {
             "builder": "${{ github.actor }}",
             "buildType": "github-actions",
-            "commit": "${{ github.sha }}"
+            "commit": "${{ github.sha }}",
+            "repository": "${{ github.repository }}",
+            "runId": "${{ github.run_id }}",
+            "runNumber": "${{ github.run_number }}",
+            "eventName": "${{ github.event_name }}",
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "runnerOS": "${{ runner.os }}"
           }
           EOF
 
@@ -73,3 +79,13 @@ jobs:
           COSIGN_EXPERIMENTAL: "1"
         run: |
           cosign attest --yes --predicate predicate.json --type custom "$IMAGE"
+
+      - name: Verify signature and attestation
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          echo "Verifying signature for $IMAGE"
+          cosign verify "$IMAGE"
+
+          echo "Verifying attestation for $IMAGE"
+          cosign verify-attestation "$IMAGE"
