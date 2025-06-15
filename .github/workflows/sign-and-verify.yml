@@ -30,6 +30,10 @@ jobs:
           sudo mv oras-install/oras /usr/local/bin/oras
           oras version
 
+      - name: Set IMAGE env var
+        run: echo "IMAGE=ghcr.io/${{ github.repository_owner }}/sigstore/myapp:latest" >> $GITHUB_ENV
+
+
       - name: Login to GHCR
         env:
           PAT_TOKEN: ${{ secrets.PAT }}
