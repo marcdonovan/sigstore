@@ -1,12 +1,14 @@
-name: CI Build
+name: Call Signing Workflow
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   call-sign-artifact:
     uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
+    permissions:
+      id-token: write      # 👈 Required for Sigstore keyless signing
+      contents: read       # 👈 Required if your workflow uses actions/checkout
     with:
       artifact_name: myapp
       artifact_path: myapp.tar.gz
