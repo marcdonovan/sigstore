@@ -1,0 +1,14 @@
+name: CI Build
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  call-sign-artifact:
+    uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
+    with:
+      artifact_name: myapp
+      artifact_path: myapp.tar.gz
+    secrets:
+      PAT: ${{ secrets.PAT }}
