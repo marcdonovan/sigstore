@@ -46,9 +46,14 @@ jobs:
       - name: Login to GHCR
         run: echo "${{ secrets.PAT }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Push artifact
+      - name: Push artifact and capture digest
+        id: push
         run: |
-          oras push "$IMAGE" ${{ inputs.artifact_path }}:application/gzip
+          DIGEST=$(oras push "$IMAGE" ${{ inputs.artifact_path }}:application/gzip | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}')
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Set image with digest
+        run: echo "IMAGE_WITH_DIGEST=${IMAGE}@${{ steps.push.outputs.digest }}" >> $GITHUB_ENV
 
       - name: Install Cosign
         run: |
@@ -60,11 +65,11 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
-          cosign sign --yes "$IMAGE"
+          cosign sign --yes "$IMAGE_WITH_DIGEST"
 
       - name: Attest artifact
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
           echo '{"build":"${{ github.workflow }}","commit":"${{ github.sha }}"}' > predicate.json
-          cosign attest --yes --predicate predicate.json --type custom "$IMAGE"
+          cosign attest --yes --predicate predicate.json --type custom "$IMAGE_WITH_DIGEST"
