@@ -31,6 +31,7 @@ jobs:
     with:
       artifact_name: myapp
       artifact_path: myapp.tar.gz
+      is_docker_image: false
     secrets:
       PAT: ${{ secrets.PAT }}
     permissions:

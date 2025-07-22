@@ -1,5 +1,3 @@
-name: Build, Push, Sign, and Attest
-
 on:
   workflow_call:
     inputs:
@@ -9,6 +7,10 @@ on:
       artifact_path:
         required: true
         type: string
+      is_docker_image:
+        required: false
+        type: boolean
+        default: false
     secrets:
       PAT:
         required: true
@@ -28,7 +30,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download artifact from caller
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
@@ -37,6 +39,7 @@ jobs:
         run: ls -alh
 
       - name: Install ORAS CLI
+        if: ${{ inputs.is_binary }}
         run: |
           curl -L -o oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz
           tar -xzf oras.tar.gz
@@ -49,7 +52,12 @@ jobs:
       - name: Push artifact and capture digest
         id: push
         run: |
-          DIGEST=$(oras push "$IMAGE" ${{ inputs.artifact_path }}:application/gzip | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}')
+          if [[ "${{ inputs.is_docker_image }}" == "false" ]]; then
+            DIGEST=$(oras push "$IMAGE" ${{ inputs.artifact_path }}:application/octet-stream | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}')
+          else
+            # Fallback if user builds and tags container themselves
+            DIGEST=$(docker push "$IMAGE" | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}' | head -n1)
+          fi
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
       - name: Set image with digest
