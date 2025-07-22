@@ -40,14 +40,9 @@ jobs:
 
       - name: Push artifact to GHCR
         run: |
-          oras push "$IMAGE" myapp.tar.gz:application/gzip
-
-      - name: Fetch and save artifact digest
-        id: get_digest
-        run: |
-          DIGEST=$(oras manifest fetch --output /dev/null --quiet "$IMAGE" | jq -r '.config.digest')
-          echo "DIGEST=$DIGEST"
-          echo "DIGEST=$DIGEST" >> $GITHUB_ENV
+          oras push "$IMAGE" \
+            myapp.tar.gz:application/gzip
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Install Cosign v2.2.0
         run: |
@@ -61,7 +56,7 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
-          cosign sign --yes "$IMAGE@${{ env.DIGEST }}"
+          cosign sign --yes "$IMAGE"
 
       - name: Create predicate file for attestation
         run: |
@@ -83,12 +78,18 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
-          cosign attest --yes --predicate predicate.json --type custom "$IMAGE@${{ env.DIGEST }}"
+          cosign attest --yes --predicate predicate.json --type custom "$IMAGE"
 
       - name: Verify signature and attestation
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
           cosign verify \
-            --certificate-identity-regexp "https://github.com/.+/.+/.github/workflows/.+@refs/heads/.+" \
-            --certificate-oidc-i
+          --certificate-identity-regexp "https://github.com/.+/.+/.github/workflows/.+@refs/heads/.+" \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          "$IMAGE"
+          
+          cosign verify-attestation \
+          --certificate-identity-regexp "https://github.com/.+/.+/.github/workflows/.+@refs/heads/.+" \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          "$IMAGE"

@@ -1,0 +1,75 @@
+name: Build, Push, Sign, and Attest
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        required: true
+        type: string
+      artifact_path:
+        required: true
+        type: string
+    secrets:
+      PAT:
+        required: true
+
+jobs:
+  sign-and-attest:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      IMAGE: ghcr.io/marcdonovan/sigstore/${{ inputs.artifact_name }}:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifact from caller
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+
+      - name: List files (debug)
+        run: ls -alh
+
+      - name: Install ORAS CLI
+        run: |
+          curl -L -o oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz
+          tar -xzf oras.tar.gz
+          chmod +x oras
+          sudo mv oras /usr/local/bin/oras
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.PAT }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push artifact and capture digest
+        id: push
+        run: |
+          DIGEST=$(oras push "$IMAGE" ${{ inputs.artifact_path }}:application/gzip | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}')
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Set image with digest
+        run: echo "IMAGE_WITH_DIGEST=${IMAGE}@${{ steps.push.outputs.digest }}" >> $GITHUB_ENV
+
+      - name: Install Cosign
+        run: |
+          curl -Lo cosign https://github.com/sigstore/cosign/releases/download/v2.2.0/cosign-linux-amd64
+          chmod +x cosign
+          sudo mv cosign /usr/local/bin/cosign
+
+      - name: Sign artifact
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign --yes "$IMAGE_WITH_DIGEST"
+
+      - name: Attest artifact
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          echo '{"build":"${{ github.workflow }}","commit":"${{ github.sha }}"}' > predicate.json
+          cosign attest --yes --predicate predicate.json --type custom "$IMAGE_WITH_DIGEST"
