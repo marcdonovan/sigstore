@@ -1,4 +1,4 @@
-name: Build and Call Signing Workflow
+name: Build and Call Signing Workflow with Binary File
 
 on:
   workflow_dispatch:

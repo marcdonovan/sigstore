@@ -1,4 +1,4 @@
-name: Build and Call Signing Workflow
+name: Build and Call Signing Workflow with Docker image
 
 on:
   workflow_dispatch:
