@@ -27,20 +27,20 @@ jobs:
       contents: read
 
     env:
-      # Use docker_image_ref if provided, else fallback to constructed IMAGE by name:latest
+      # Set IMAGE dynamically: use docker_image_ref if set, else default naming scheme
       IMAGE: ${{ inputs.docker_image_ref != '' && inputs.docker_image_ref || format('ghcr.io/marcdonovan/sigstore/{0}:latest', inputs.artifact_name) }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download artifact (only for non-docker images)
+      - name: Download artifact (only for non-docker)
         if: ${{ !inputs.is_docker_image }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
 
-      - name: Install ORAS CLI (only for non-docker images)
+      - name: Install ORAS CLI
         if: ${{ !inputs.is_docker_image }}
         run: |
           curl -L -o oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz
@@ -48,76 +48,20 @@ jobs:
           chmod +x oras
           sudo mv oras /usr/local/bin/oras
 
-      - name: Login to registry
-        if: ${{ inputs.is_docker_image }}
-        run: echo "${{ secrets.PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      - name: Login to registry (ORAS)
-        if: ${{ !inputs.is_docker_image }}
+      - name: Login to GHCR with ORAS
         run: echo "${{ secrets.PAT }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Debug environment variables
+      - name: Push artifact or docker image and capture digest
+        id: push
+        env:
+          IS_DOCKER_IMAGE: ${{ inputs.is_docker_image }}
+          ARTIFACT_PATH: ${{ inputs.artifact_path }}
+          IMAGE: ${{ env.IMAGE }}
         run: |
-          echo "is_docker_image=${{ inputs.is_docker_image }}"
-          echo "artifact_name=${{ inputs.artifact_name }}"
-          echo "artifact_path=${{ inputs.artifact_path }}"
-          echo "docker_image_ref=${{ inputs.docker_image_ref }}"
+          echo "IS_DOCKER_IMAGE=$IS_DOCKER_IMAGE"
+          echo "ARTIFACT_PATH=$ARTIFACT_PATH"
           echo "IMAGE=$IMAGE"
 
-
-      - name: Push artifact and capture digest
-        id: push
-        run: |
-          echo "DEBUG: is_docker_image='${{ inputs.is_docker_image }}'"
-          echo "DEBUG: artifact_path='${{ inputs.artifact_path }}'"
-          echo "DEBUG: IMAGE='$IMAGE'"
-          
-          if [[ "${{ inputs.is_docker_image }}" == "false" ]]; then
-            if [[ -z "${{ inputs.artifact_path }}" ]]; then
-              echo "ERROR: artifact_path is required when is_docker_image is false"
-              exit 1
-            fi
-          
-            DIGEST=$(oras push "$IMAGE" "${{ inputs.artifact_path }}":application/octet-stream | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}')
-          else
-            docker push "$IMAGE"
-            FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
-            echo "DEBUG: Full digest: $FULL_DIGEST"
-            DIGEST=${FULL_DIGEST#*@}
-          fi
-          
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-
-#      - name: Push artifact or Docker image and capture digest
-#        id: push
-#        run: |
-#          if [[ "${{ inputs.is_docker_image }}" == "false" ]]; then
-#            DIGEST=$(oras push "$IMAGE" ${{ inputs.artifact_path }}:application/octet-stream | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}')
-#          else
-#            docker push "$IMAGE"
-#            FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
-#            echo "Full digest: $FULL_DIGEST"
-#            DIGEST=${FULL_DIGEST#*@}
-#          fi
-#          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-
-      - name: Set image with digest
-        run: echo "IMAGE_WITH_DIGEST=${IMAGE}@${{ steps.push.outputs.digest }}" >> $GITHUB_ENV
-
-      - name: Install Cosign
-        run: |
-          curl -Lo cosign https://github.com/sigstore/cosign/releases/download/v2.2.0/cosign-linux-amd64
-          chmod +x cosign
-          sudo mv cosign /usr/local/bin/cosign
-
-      - name: Sign artifact/image
-        env:
-          COSIGN_EXPERIMENTAL: "1"
-        run: |
-          cosign sign --yes "$IMAGE_WITH_DIGEST"
-
-      - name: Attest artifact/image
-        env:
-          COSIGN_EXPERIMENTAL: "1"
-        run: |
-          echo '{"build":"${{ github.workflow }}","commit":"${{ github.sha }}"}' > predicate.json
-          cosign attest --yes --predicate predicate.json --type custom "$IMAGE_WITH_DIGEST"
+          if [[ "$IS_DOCKER_IMAGE" == "false" ]]; then
+            if [[ -z "$ARTIFACT_PATH" ]]; then
+              echo "ERROR: artifact_path is required when_
