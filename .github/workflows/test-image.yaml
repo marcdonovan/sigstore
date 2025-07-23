@@ -1,10 +1,10 @@
-name: Build and Call Signing Workflow with Docker image
+name: Build and Call Signing Workflow with Auto-detect
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-artifact:
+  build:
     runs-on: ubuntu-latest
     outputs:
       image_digest: ${{ steps.get_digest.outputs.digest }}
@@ -27,7 +27,7 @@ jobs:
       - name: Push Docker image
         run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
 
-      - name: Get Digest
+      - name: Get Docker image digest
         id: get_digest
         run: |
           FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/marcdonovan/sigstore/test-image:latest)
@@ -35,13 +35,12 @@ jobs:
           echo "digest=${FULL_DIGEST#*@}" >> "$GITHUB_OUTPUT"
 
   call-sign-artifact:
-    needs: build-artifact
+    needs: build
     uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
     with:
-      artifact_name: test-image
       docker_image_ref: ghcr.io/marcdonovan/sigstore/test-image:latest
-      docker_image_digest: ${{ needs.build-artifact.outputs.image_digest }}
-      is_docker_image: true
+      docker_image_digest: ${{ needs.build.outputs.image_digest }}
+      # Optionally add artifact_path for non-Docker use case
     secrets:
       PAT: ${{ secrets.PAT }}
     permissions:
