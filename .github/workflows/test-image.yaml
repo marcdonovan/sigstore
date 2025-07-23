@@ -25,8 +25,21 @@ jobs:
           PAT_TOKEN: ${{ secrets.PAT }}
         run: echo "$PAT_TOKEN" | docker login ghcr.io -u marcdonovan --password-stdin
 
-      - name: Push Docker image
-        run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
+#      - name: Push Docker image
+#        run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
+
+      - name: Push artifact or Docker image and capture digest
+        id: push
+        run: |
+          if [[ "${{ inputs.is_docker_image }}" == "false" ]]; then
+            DIGEST=$(oras push "$IMAGE" ${{ inputs.artifact_path }}:application/octet-stream | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}')
+          else
+            docker push "$IMAGE"
+            FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+            echo "Full digest: $FULL_DIGEST"
+            DIGEST=${FULL_DIGEST#*@}
+          fi
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
   call-sign-artifact:
     needs: build-artifact
