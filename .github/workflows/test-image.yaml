@@ -28,6 +28,8 @@ on:
 jobs:
   build-artifact:
     runs-on: ubuntu-latest
+    outputs:
+      image_digest: ${{ steps.get_digest.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,16 +51,61 @@ jobs:
       - name: Push Docker image
         run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
 
+      - name: Get pushed image digest
+        id: get_digest
+        run: |
+          FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/marcdonovan/sigstore/test-image:latest)
+          echo "Full digest: $FULL_DIGEST"
+          DIGEST=${FULL_DIGEST#*@}
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+#  build-artifact:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Build Docker image
+#        run: |
+#          echo "FROM alpine" > Dockerfile
+#          echo "RUN echo Hello world > /hello.txt" >> Dockerfile
+#          docker build -t ghcr.io/marcdonovan/sigstore/test-image:latest .
+#
+#      - name: Show Docker images (debug)
+#        run: docker images
+#
+#      - name: Login to GHCR
+#        env:
+#          PAT_TOKEN: ${{ secrets.PAT }}
+#        run: echo "$PAT_TOKEN" | docker login ghcr.io -u marcdonovan --password-stdin
+#
+#      - name: Push Docker image
+#        run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
+#
+
+#  call-sign-artifact:
+#    needs: build-artifact
+#    uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
+#    with:
+#      artifact_name: test-image
+#      docker_image_ref: ghcr.io/marcdonovan/sigstore/test-image:latest
+#      is_docker_image: true
+#    secrets:
+#      PAT: ${{ secrets.PAT }}
+#    permissions:
+#      id-token: write
+#      contents: read
 
   call-sign-artifact:
     needs: build-artifact
     uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
     with:
       artifact_name: test-image
-      docker_image_ref: ghcr.io/marcdonovan/sigstore/test-image:latest
+      docker_image_ref: ghcr.io/marcdonovan/sigstore/test-image@${{ needs.build-artifact.outputs.image_digest }}
       is_docker_image: true
     secrets:
       PAT: ${{ secrets.PAT }}
     permissions:
       id-token: write
       contents: read
+
