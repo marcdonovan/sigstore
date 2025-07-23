@@ -1,0 +1,40 @@
+name: Build and Call Signing Workflow
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-artifact:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_name: myapp
+      artifact_path: myapp.tar.gz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build artifact
+        run: |
+          echo "Hello world" > myapp.txt
+          tar -czf myapp.tar.gz myapp.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: myapp
+          path: myapp.tar.gz
+
+  call-sign-artifact:
+    needs: build-artifact
+    uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
+    with:
+      artifact_name: myapp
+      artifact_path: myapp.tar.gz
+      is_docker_image: true
+    secrets:
+      PAT: ${{ secrets.PAT }}
+    permissions:
+      id-token: write
+      contents: read
+

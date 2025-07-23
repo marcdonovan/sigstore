@@ -35,8 +35,8 @@ jobs:
         with:
           name: ${{ inputs.artifact_name }}
 
-      - name: List files (debug)
-        run: ls -alh
+#      - name: List files (debug)
+#        run: ls -alh
 
       - name: Install ORAS CLI
         if: ${{ !inputs.is_docker_image }}
