@@ -1,0 +1,83 @@
+name: Build and Call Signing Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      is_docker_image:
+        description: "Is this a Docker image?"
+        required: true
+        default: "true"
+      artifact_path:
+        description: "Path to file to push (for non-Docker only)"
+        required: false
+
+jobs:
+  build-or-upload:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.extract-digest.outputs.digest }}
+      image_ref: ${{ steps.set-image.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ORAS (for non-Docker)
+        if: ${{ inputs.is_docker_image == 'false' }}
+        run: |
+          curl -sLo oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.1.0/oras_1.1.0_linux_amd64.tar.gz
+          tar -xzf oras.tar.gz oras
+          sudo mv oras /usr/local/bin/
+
+      - name: Login to GHCR
+        env:
+          PAT_TOKEN: ${{ secrets.PAT }}
+        run: echo "$PAT_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Set image name
+        id: set-image
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}/test-artifact:latest"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image (if docker)
+        if: ${{ inputs.is_docker_image == 'true' }}
+        run: |
+          echo "FROM alpine" > Dockerfile
+          echo "RUN echo Hello world > /hello.txt" >> Dockerfile
+          docker build -t ${{ steps.set-image.outputs.image }} .
+
+      - name: Push Docker image (if docker)
+        if: ${{ inputs.is_docker_image == 'true' }}
+        run: docker push ${{ steps.set-image.outputs.image }}
+
+      - name: Push ORAS artifact (if not docker)
+        if: ${{ inputs.is_docker_image == 'false' }}
+        run: |
+          oras push ${{ steps.set-image.outputs.image }}:latest \
+            --artifact-type application/octet-stream \
+            ${{ inputs.artifact_path }}
+
+      - name: Extract digest
+        id: extract-digest
+        run: |
+          if [[ "${{ inputs.is_docker_image }}" == "true" ]]; then
+            FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${{ steps.set-image.outputs.image }}")
+            DIGEST=${FULL_DIGEST#*@}
+          else
+            DIGEST=$(oras manifest fetch --output json "${{ steps.set-image.outputs.image }}:latest" | jq -r '.digest')
+          fi
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+  call-sign-artifact:
+    needs: build-or-upload
+    uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
+    with:
+      artifact_name: test-artifact
+      docker_image_ref: ghcr.io/marcdonovan/sigstore/test-artifact@${{ needs.build-or-upload.outputs.digest }}
+      is_docker_image: ${{ github.event.inputs.is_docker_image }}
+      artifact_path: ${{ github.event.inputs.artifact_path }}
+    secrets:
+      PAT: ${{ secrets.PAT }}
+    permissions:
+      id-token: write
+      contents: read

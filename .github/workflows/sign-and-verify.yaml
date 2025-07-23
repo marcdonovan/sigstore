@@ -1,48 +1,47 @@
-name: Sign and Verify Artifact
+name: Build and Call Signing Workflow with Auto-detect
 
 on:
-  workflow_call:
-    inputs:
-      artifact_name:
-        required: false
-        type: string
-      artifact_path:
-        required: false
-        type: string
-      docker_image_ref:
-        required: false
-        type: string
-      docker_image_digest:
-        required: false
-        type: string
-    secrets:
-      PAT:
-        required: true
+  workflow_dispatch:
 
 jobs:
-  sign-artifact:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      image_digest: ${{ steps.get_digest.outputs.digest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          echo "FROM alpine" > Dockerfile
+          echo "RUN echo Hello world > /hello.txt" >> Dockerfile
+          docker build -t ghcr.io/marcdonovan/sigstore/test-image:latest .
+
+      - name: Login to GHCR
+        env:
+          PAT_TOKEN: ${{ secrets.PAT }}
+        run: echo "$PAT_TOKEN" | docker login ghcr.io -u marcdonovan --password-stdin
+
+      - name: Push Docker image
+        run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
+
+      - name: Get Docker image digest
+        id: get_digest
+        run: |
+          FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/marcdonovan/sigstore/test-image:latest)
+          echo "Full digest: $FULL_DIGEST"
+          echo "digest=${FULL_DIGEST#*@}" >> "$GITHUB_OUTPUT"
+
+  call-sign-artifact:
+    needs: build
+    uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
+    with:
+      docker_image_ref: ghcr.io/marcdonovan/sigstore/test-image:latest
+      docker_image_digest: ${{ needs.build.outputs.image_digest }}
+    secrets:
+      PAT: ${{ secrets.PAT }}
     permissions:
       id-token: write
       contents: read
-
-    steps:
-      - name: Detect and Sign
-        run: |
-          echo "docker_image_ref=${{ inputs.docker_image_ref }}"
-          echo "docker_image_digest=${{ inputs.docker_image_digest }}"
-          echo "artifact_path=${{ inputs.artifact_path }}"
-          
-          if [[ -n "${{ inputs.docker_image_ref }}" && -n "${{ inputs.docker_image_digest }}" ]]; then
-            echo "Signing Docker image..."
-            echo "Digest: ${{ inputs.docker_image_digest }}"
-            # Sign Docker image logic here
-
-          elif [[ -n "${{ inputs.artifact_path }}" ]]; then
-            echo "Signing binary artifact..."
-            # Example: digest=$(oras push ...)
-            # echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          else
-            echo "ERROR: No artifact to sign. Please provide either docker_image_ref + digest OR artifact_path."
-            exit 1
-          fi
