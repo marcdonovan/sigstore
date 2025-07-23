@@ -7,9 +7,8 @@ jobs:
   build-artifact:
     runs-on: ubuntu-latest
     outputs:
-      artifact_name: myapp
-      artifact_path: myapp.tar.gz   # still outputting artifact path, adjust if needed
-      docker_image_ref: ghcr.io/marcdonovan/sigstore/myapp:latest
+      artifact_name: test-image
+      docker_image_ref: ghcr.io/marcdonovan/sigstore/test-image:latest
 
     steps:
       - name: Checkout
@@ -28,17 +27,6 @@ jobs:
 
       - name: Push Docker image
         run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
-
-#      - name: Upload artifact
-#        run: |
-#          echo "Hello world" > myapp.txt
-#          tar -czf myapp.tar.gz myapp.txt
-#        # Optional: keep artifact upload if you want to also test non-image signing
-#      - name: Upload artifact
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: myapp
-#          path: myapp.tar.gz
 
   call-sign-artifact:
     needs: build-artifact

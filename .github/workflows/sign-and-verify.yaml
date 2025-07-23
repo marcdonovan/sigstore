@@ -27,46 +27,44 @@ jobs:
       contents: read
 
     env:
-      IMAGE: ghcr.io/marcdonovan/sigstore/${{ inputs.artifact_name }}:latest
+      # Use docker_image_ref if provided, else fallback to constructed IMAGE by name:latest
+      IMAGE: ${{ inputs.docker_image_ref != '' && inputs.docker_image_ref || format('ghcr.io/marcdonovan/sigstore/{0}:latest', inputs.artifact_name) }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download artifact
+      - name: Download artifact (only for non-docker images)
         if: ${{ !inputs.is_docker_image }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
 
-#      - name: List files (debug)
-#        run: ls -alh
-
-      - name: Install ORAS CLI
+      - name: Install ORAS CLI (only for non-docker images)
+        if: ${{ !inputs.is_docker_image }}
         run: |
           curl -L -o oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz
           tar -xzf oras.tar.gz
           chmod +x oras
           sudo mv oras /usr/local/bin/oras
-#      - name: Install ORAS CLI
-#        if: ${{ !inputs.is_docker_image }}
-#        run: |
-#          curl -L -o oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz
-#          tar -xzf oras.tar.gz
-#          chmod +x oras
-#          sudo mv oras /usr/local/bin/oras
 
-      - name: Login to GHCR
+      - name: Login to registry
+        if: ${{ inputs.is_docker_image }}
+        run: echo "${{ secrets.PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Login to registry (ORAS)
+        if: ${{ !inputs.is_docker_image }}
         run: echo "${{ secrets.PAT }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Push artifact and capture digest
+      - name: Push artifact or Docker image and capture digest
         id: push
         run: |
           if [[ "${{ inputs.is_docker_image }}" == "false" ]]; then
             DIGEST=$(oras push "$IMAGE" ${{ inputs.artifact_path }}:application/octet-stream | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}')
           else
-            # Fallback if user builds and tags container themselves
-            DIGEST=$(docker push "$IMAGE" | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}' | head -n1)
+            docker push "$IMAGE"
+            FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+            echo "Full digest: $FULL_DIGEST"
+            DIGEST=${FULL_DIGEST#*@}
           fi
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
@@ -79,13 +77,13 @@ jobs:
           chmod +x cosign
           sudo mv cosign /usr/local/bin/cosign
 
-      - name: Sign artifact
+      - name: Sign artifact/image
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
           cosign sign --yes "$IMAGE_WITH_DIGEST"
 
-      - name: Attest artifact
+      - name: Attest artifact/image
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
