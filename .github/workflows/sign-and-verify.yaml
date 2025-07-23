@@ -43,12 +43,18 @@ jobs:
 #        run: ls -alh
 
       - name: Install ORAS CLI
-        if: ${{ !inputs.is_docker_image }}
         run: |
           curl -L -o oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz
           tar -xzf oras.tar.gz
           chmod +x oras
           sudo mv oras /usr/local/bin/oras
+#      - name: Install ORAS CLI
+#        if: ${{ !inputs.is_docker_image }}
+#        run: |
+#          curl -L -o oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz
+#          tar -xzf oras.tar.gz
+#          chmod +x oras
+#          sudo mv oras /usr/local/bin/oras
 
       - name: Login to GHCR
         run: echo "${{ secrets.PAT }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
