@@ -3,10 +3,31 @@ name: Build and Call Signing Workflow with Docker image
 on:
   workflow_dispatch:
 
+#jobs:
+#  build-artifact:
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Build Docker image
+#        run: |
+#          echo "FROM alpine" > Dockerfile
+#          echo "RUN echo Hello world > /hello.txt" >> Dockerfile
+#          docker build -t ghcr.io/marcdonovan/sigstore/test-image:latest .
+#
+#      - name: Login to GHCR
+#        env:
+#          PAT_TOKEN: ${{ secrets.PAT }}
+#        run: echo "$PAT_TOKEN" | docker login ghcr.io -u marcdonovan --password-stdin
+#
+#      - name: Push Docker image
+#        run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
+
 jobs:
   build-artifact:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,6 +38,9 @@ jobs:
           echo "RUN echo Hello world > /hello.txt" >> Dockerfile
           docker build -t ghcr.io/marcdonovan/sigstore/test-image:latest .
 
+      - name: Show Docker images (debug)
+        run: docker images
+
       - name: Login to GHCR
         env:
           PAT_TOKEN: ${{ secrets.PAT }}
@@ -24,6 +48,7 @@ jobs:
 
       - name: Push Docker image
         run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
+
 
   call-sign-artifact:
     needs: build-artifact
