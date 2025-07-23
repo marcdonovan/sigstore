@@ -45,9 +45,8 @@ jobs:
     uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
     with:
       artifact_name: test-image
-#      artifact_path: myapp.tar.gz
       docker_image_ref: ghcr.io/marcdonovan/sigstore/test-image:latest
-      is_docker_image: true    # pass this flag
+      is_docker_image: true
     secrets:
       PAT: ${{ secrets.PAT }}
     permissions:
