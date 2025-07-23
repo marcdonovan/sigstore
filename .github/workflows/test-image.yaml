@@ -8,33 +8,48 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       artifact_name: myapp
-      artifact_path: myapp.tar.gz
+      artifact_path: myapp.tar.gz   # still outputting artifact path, adjust if needed
+      docker_image_ref: ghcr.io/marcdonovan/sigstore/myapp:latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build artifact
+      - name: Build Docker image
         run: |
-          echo "Hello world" > myapp.txt
-          tar -czf myapp.tar.gz myapp.txt
+          echo "FROM alpine" > Dockerfile
+          echo "RUN echo Hello world > /hello.txt" >> Dockerfile
+          docker build -t ghcr.io/marcdonovan/sigstore/test-image:latest .
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: myapp
-          path: myapp.tar.gz
+      - name: Login to GHCR
+        env:
+          PAT_TOKEN: ${{ secrets.PAT }}
+        run: echo "$PAT_TOKEN" | docker login ghcr.io -u marcdonovan --password-stdin
+
+      - name: Push Docker image
+        run: docker push ghcr.io/marcdonovan/sigstore/yest-image:latest
+
+#      - name: Upload artifact
+#        run: |
+#          echo "Hello world" > myapp.txt
+#          tar -czf myapp.tar.gz myapp.txt
+#        # Optional: keep artifact upload if you want to also test non-image signing
+#      - name: Upload artifact
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: myapp
+#          path: myapp.tar.gz
 
   call-sign-artifact:
     needs: build-artifact
     uses: marcdonovan/sigstore/.github/workflows/sign-and-verify.yaml@main
     with:
-      artifact_name: myapp
-      artifact_path: myapp.tar.gz
-      is_docker_image: true
+      artifact_name: test-image
+#      artifact_path: myapp.tar.gz
+      docker_image_ref: ghcr.io/marcdonovan/sigstore/test-image:latest
+      is_docker_image: true    # pass this flag
     secrets:
       PAT: ${{ secrets.PAT }}
     permissions:
       id-token: write
       contents: read
-
