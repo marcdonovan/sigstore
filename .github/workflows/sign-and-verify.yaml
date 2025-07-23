@@ -41,7 +41,6 @@ jobs:
           name: ${{ inputs.artifact_name }}
 
       - name: Install ORAS CLI
-        if: ${{ !inputs.is_docker_image }}
         run: |
           curl -L -o oras.tar.gz https://github.com/oras-project/oras/releases/download/v1.2.3/oras_1.2.3_linux_amd64.tar.gz
           tar -xzf oras.tar.gz
