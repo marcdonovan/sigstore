@@ -27,7 +27,7 @@ jobs:
         run: echo "$PAT_TOKEN" | docker login ghcr.io -u marcdonovan --password-stdin
 
       - name: Push Docker image
-        run: docker push ghcr.io/marcdonovan/sigstore/yest-image:latest
+        run: docker push ghcr.io/marcdonovan/sigstore/test-image:latest
 
 #      - name: Upload artifact
 #        run: |
