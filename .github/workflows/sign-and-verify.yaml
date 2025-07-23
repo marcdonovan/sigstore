@@ -57,10 +57,31 @@ jobs:
           ARTIFACT_PATH: ${{ inputs.artifact_path }}
           IMAGE: ${{ env.IMAGE }}
         run: |
+#          echo "IS_DOCKER_IMAGE=$IS_DOCKER_IMAGE"
+#          echo "ARTIFACT_PATH=$ARTIFACT_PATH"
+#          echo "IMAGE=$IMAGE"
+#
+#          if [[ "$IS_DOCKER_IMAGE" == "false" ]]; then
+#            if [[ -z "$ARTIFACT_PATH" ]]; then
+#              echo "ERROR: artifact_path is required when_
+#
+#
           echo "IS_DOCKER_IMAGE=$IS_DOCKER_IMAGE"
           echo "ARTIFACT_PATH=$ARTIFACT_PATH"
           echo "IMAGE=$IMAGE"
-
+          
           if [[ "$IS_DOCKER_IMAGE" == "false" ]]; then
-            if [[ -z "$ARTIFACT_PATH" ]]; then
-              echo "ERROR: artifact_path is required when_
+          if [[ -z "$ARTIFACT_PATH" ]]; then
+        echo "ERROR: artifact_path is required when is_docker_image is false"
+          exit 1
+          fi
+        
+          DIGEST=$(oras push "$IMAGE" "$ARTIFACT_PATH":application/octet-stream | tee /dev/stderr | grep -o 'sha256:[a-f0-9]\{64\}')
+          else
+          docker push "$IMAGE"
+          FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+        echo "Full digest: $FULL_DIGEST"
+          DIGEST=${FULL_DIGEST#*@}
+          fi
+          
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
